@@ -10,6 +10,9 @@
 #include <linux/i2c-dev.h>
 #include <pthread.h>
 #include <string.h>
+#include <sys/stat.h>
+
+
 
 
 #define SLAVE_ADDR  0x3f
@@ -462,7 +465,7 @@ void ShowLineStringAtPos(int line, int offset, char* str)
 void ClearLine(int line)
 {
     char szBuf[LCD_1602_TOTAL_COLUMN];
-    memset(szBuf, 0, LCD_1602_TOTAL_COLUMN);
+    memset(szBuf, ' ', LCD_1602_TOTAL_COLUMN);
     ShowStringAtPos(line, 0, szBuf);
 }
 
@@ -782,7 +785,7 @@ void* thread_DisplayBufFresh(void* arg)
                     TmpStr++;
                 }else
                 {
-                    LCD1602_WriteData(0);
+                    LCD1602_WriteData(' ');
                 } 
             }
         }
@@ -801,7 +804,7 @@ void* thread_DisplayBufFresh(void* arg)
                     TmpStr++;
                 }else
                 {
-                    LCD1602_WriteData(0);
+                    LCD1602_WriteData(' ');
                 }
                 
             }
@@ -885,6 +888,139 @@ void LedPwr(char cmd)
     }
 }
 
+
+int check_char_is_valid_display(char c)
+{
+	if(c >= ' ' && c <= '~')
+	{
+		return 1;
+	}
+	return 0;
+}
+
+void* thread_LoadDisplayFile(void* arg)
+{
+	char line_1_file_name[] = "lcd_line_1";
+	char line_2_file_name[] = "lcd_line_2";
+	char line_1_buf[LCD_DISPLAY_STR_MAX] = {0};
+	char line_2_buf[LCD_DISPLAY_STR_MAX] = {0};
+	StuLcdDisplayInfo TmpDisplayInfo;
+	int buf_pos = 0;
+	int fd_list[512] = {0};
+	int fd_list_pos = 0;
+	char tmpC = 0;
+	int ret = 0;
+	int i;
+
+	int set_load_period = 1;
+	
+	int fd_1=-1, fd_2 = -1;
+	fd_1 = open(line_1_file_name, O_RDONLY|O_CREAT);
+	fd_2 = open(line_2_file_name, O_RDONLY|O_CREAT);
+
+	if(0>fd_1 || 0>fd_2)
+	{
+		printf("Failed to open\n");
+		return NULL;
+	}
+
+	for(;;)
+	{
+
+		for(i=0; i< fd_list_pos; i++)
+		{
+			DisplayDellListById(fd_list[i]);
+		}
+		fd_list_pos = 0;
+		
+		lseek(fd_1, 0, SEEK_SET);
+		for(i=0, buf_pos = 0; i< LCD_DISPLAY_STR_MAX; i++)
+		{
+			ret = read(fd_1, (void*)&tmpC, 1);
+			if(1 == ret && check_char_is_valid_display(tmpC))
+			{	
+				line_1_buf[buf_pos] = tmpC;
+				buf_pos += 1;
+			}
+			else
+			{
+				break;
+			}
+		}
+		if(0 != buf_pos)
+		{
+			line_1_buf[buf_pos] = '\0';
+	        TmpDisplayInfo.ulLine = LCD_LINE_1;
+	        sprintf(TmpDisplayInfo.szBuf, "%s", line_1_buf);
+	        fd_list[fd_list_pos] = DisplayAddList(&TmpDisplayInfo);
+	        fd_list_pos++;
+	        
+		}
+
+		lseek(fd_2, 0, SEEK_SET);
+		for(i=0, buf_pos = 0; i< LCD_DISPLAY_STR_MAX; i++)
+		{
+			ret = read(fd_2, (void*)&tmpC, 1);
+			if(1 == ret && check_char_is_valid_display(tmpC))
+			{	
+				line_2_buf[buf_pos] = tmpC;
+				buf_pos += 1;
+			}
+			else
+			{
+				break;
+			}
+		}
+		if(0 != buf_pos)
+		{
+			line_2_buf[buf_pos] = '\0';
+	        TmpDisplayInfo.ulLine = LCD_LINE_2;
+	        sprintf(TmpDisplayInfo.szBuf, "%s", line_2_buf);
+	        fd_list[fd_list_pos] = DisplayAddList(&TmpDisplayInfo);
+	        fd_list_pos++;
+		}
+		sleep(set_load_period);
+
+	}
+	
+
+	
+}
+
+
+void MainThreadStart(void)
+{
+    pthread_t tid;
+    int err = 0;
+    DisplayListInit();
+    err = pthread_create(&tid, NULL, thread_LoadDisplayFile, NULL);
+    if(err)
+    {
+        printf("ERROR: create thread fail [%d]\n", err);
+    }
+
+    return;
+}
+
+int do_daemon(void)
+{
+	int fd = 0;
+	fd = fork();
+	if(0 <= fd)
+	{
+		if(0 == fd)
+		{
+			return 0;
+		}
+		_exit(0);
+		return 0;
+	}
+	else
+	{
+		printf("Failed to fork\n");
+	}
+}
+
 int main(void)
 {
     int ret;
@@ -906,11 +1042,22 @@ int main(void)
     print2(0x88,0xE4);     // 在第1行第9位 ASCII 中的upeer 4bit 1110  lower 4bit 0100对应的 μ
     print(0x42,"www.51cto.com");
     */
+
+    do_daemon();
     DisplayThreadStart();
+    
+    #if 1
+	MainThreadStart();
+
+    for(;;)
+    {
+    	sleep(5);;
+    }
+#endif
     for(count=0; count<10; count++)
     {
         TmpDisplayInfo.ulLine = LCD_LINE_1;
-        sprintf(TmpDisplayInfo.szBuf, "Line 1, info [%d]", count);
+        sprintf(TmpDisplayInfo.szBuf, "Line info [%d]", count);
         DisplayAddList(&TmpDisplayInfo);
         printf("line1 add id[%d]\n", TmpDisplayInfo.ulId);
     }

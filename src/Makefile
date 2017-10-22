@@ -1,4 +1,4 @@
-CC=gcc
+CC=g++
 Flag=
 LIB=-lpthread
 obj=led_i2c_command.cpp
