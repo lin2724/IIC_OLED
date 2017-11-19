@@ -1,8 +1,8 @@
 CC=g++
 Flag=
-LIB=-lpthread
-obj=led_i2c_command.cpp
-test:led_i2c_command.cpp
+LIB=-pthread
+obj=led_i2c_command.cpp log.cpp
+test:led_i2c_command.cpp log.cpp log.h
 	$(CC) -g $(LIB) $(FLAG) -o $@ $^
 *.o:*.cpp
 	$(CC) -g $(FLAG) $(LIB) -c $^
@@ -10,3 +10,4 @@ test:led_i2c_command.cpp
 
 clean:
 	rm -rf *.o
+	rm -f test
