@@ -904,8 +904,8 @@ int check_char_is_valid_display(char c)
 
 void* thread_LoadDisplayFile(void* arg)
 {
-	char line_1_file_name[] = "lcd_line_1";
-	char line_2_file_name[] = "lcd_line_2";
+	char line_1_file_name[] = "/dev/lcd_line_1";
+	char line_2_file_name[] = "/dev/lcd_line_2";
 	char line_1_buf[LCD_DISPLAY_STR_MAX] = {0};
 	char line_2_buf[LCD_DISPLAY_STR_MAX] = {0};
 	StuLcdDisplayInfo TmpDisplayInfo;
