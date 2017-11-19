@@ -11,9 +11,13 @@
 #include <pthread.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <errno.h>
 
+#include <string>
 
+#include "log.h"
 
+using namespace std;
 
 #define SLAVE_ADDR  0x3f
 
@@ -93,22 +97,22 @@ void JustTest(void)
     int slave_addr = SLAVE_ADDR;
     int res, ret;
     char buf[2];
-    char* device_name[2] = {"/dev/i2c-0", "/dev/i2c-1"};
+    const char* device_name[2] = {"/dev/i2c-0", "/dev/i2c-1"};
 
     for(int count=0; count<2; count++ )
     {
         i2c_fd = open(device_name[count], O_RDWR);
-        printf("open device %s\n", device_name[count]);
+        LOG_1("open device %s\n", device_name[count]);
         if(i2c_fd < 0)
         {
-            printf("ERROR: fail to open i2c device %s\n", device_name[count]);
+            LOG_1("ERROR: fail to open i2c device %s\n", device_name[count]);
             continue;
         }
         for(int addr_poll=0; addr_poll<=0x80; addr_poll++)
         {
             if(ioctl(i2c_fd, I2C_SLAVE, addr_poll) < 0)
             {
-                printf("ERROR: fail set slave addr 0x%x\n", addr_poll);
+                LOG_1("ERROR: fail set slave addr 0x%x\n", addr_poll);
                 usleep(200*1000);
                 continue;
             }
@@ -117,15 +121,15 @@ void JustTest(void)
             {
                 if((addr_poll%10)==0)
                 {
-                    printf("read addr fail ret: 0x%x\n" , addr_poll);
+                    LOG_1("read addr fail ret: 0x%x\n" , addr_poll);
                 }else
                 {
-                    printf(".");
+                    LOG_0(".");
                 }
 
             }else
             {
-                printf("read succeed with device %s ,and addr 0x%x ,total read %d!\n", device_name[count], addr_poll, ret);
+                LOG_3("read succeed with device %s ,and addr 0x%x ,total read %d!\n", device_name[count], addr_poll, ret);
             }
             usleep(10*1000);
         }
@@ -196,9 +200,9 @@ void wait_1602_busy(void)
             break;
         }
         usleep(50*1000);
-        printf("busy..\n");
+        LOG_0("busy..\n");
     }
-    printf("wait done\n");
+    LOG_0("wait done\n");
 }
 
 
@@ -251,17 +255,17 @@ void LCD1602_WriteCMD(unsigned char cmd)
 int Oled_I2c_Init(void)
 {
     char buf[2];
-    char* device_name[2] = {"/dev/i2c-0", "/dev/i2c-1"};
+    const char* device_name[2] = {"/dev/i2c-0", "/dev/i2c-1"};
     int i2c_fd = open(device_name[0], O_RDWR);
-    printf("open device %s\n", device_name[0]);
+    LOG_1("open device %s\n", device_name[0]);
     if(i2c_fd < 0)
     {
-        printf("ERROR: fail to open i2c device %s\n", device_name[0]);
+        LOG_1("ERROR: fail to open i2c device %s\n", device_name[0]);
         return -1;
     }
     if(ioctl(i2c_fd, I2C_SLAVE, SLAVE_ADDR) < 0)
     {
-        printf("ERROR: fail set slave addr 0x%x\n", SLAVE_ADDR);
+        LOG_1("ERROR: fail set slave addr 0x%x\n", SLAVE_ADDR);
         return -1;
     }
     buf[0] = 0;
@@ -269,10 +273,10 @@ int Oled_I2c_Init(void)
     ret = read(i2c_fd, buf, 2);
     if(ret < 1)
     {
-        printf("read test addr fail ret: 0x%x\n" , SLAVE_ADDR);
+        LOG_1("read test addr fail ret: 0x%x\n" , SLAVE_ADDR);
     }else
     {
-        printf("read succeed with device %s ,and addr %d ,total read %d!\n", device_name[0], SLAVE_ADDR, ret);
+        LOG_3("read succeed with device %s ,and addr %d ,total read %d!\n", device_name[0], SLAVE_ADDR, ret);
     }
     return i2c_fd;
 }
@@ -285,11 +289,11 @@ void I2C_WriteByte(unsigned char addr,unsigned char data)
     buf[0] = addr;
     buf[1] = data;
     ret = write(G_I2cFd, (void*)&buf[0], 2);
-    if(ret != 2){printf("write byte fail %d\n", ret);}
+    if(ret != 2){LOG_1("write byte fail %d\n", ret);}
     usleep(100*1000);
     return;
     ret = write(G_I2cFd, (void*)&buf[1], 1);
-    if(ret != 1){printf("write byte fail %d\n", ret);}
+    if(ret != 1){LOG_1("write byte fail %d\n", ret);}
     usleep(1*1000);
 }
 
@@ -326,8 +330,8 @@ void print2(unsigned char a,unsigned char t){
 }
 void LCD1602_LightCmd(int cmd)
 {
-    if(cmd){printf("light on\n");}
-    else{printf("light off\n");}
+    if(cmd){LOG_0("light on\n");}
+    else{LOG_0("light off\n");}
     set_1602_Light(cmd);
     SetAllPin();
 }
@@ -365,7 +369,7 @@ void OLED_Init(void)
     LCD1602_WriteCMD(CMD_add1);  //  显示光标移动设置：文字不动，光标右移
     LCD1602_WriteCMD(CMD_dis_gb1);  //  显示开及光标设置：显示开，光标开，闪烁开
     CgramWrite();
-    printf("led init done\n");
+    LOG_0("led init done\n");
 }
 
 
@@ -377,21 +381,21 @@ void OLED_DrawBMP(void)
 void ShowPin(char data)
 {
     int i, j;
-    printf("#### ####\n");
+    LOG_0("#### ####\n");
     for(i=7; i>=0; i--)
     {
-        if(data & (1<<i)){printf("1");}
-        else{printf("0");}
-        if(i==4){printf(" ");}
+        if(data & (1<<i)){LOG_0("1");}
+        else{LOG_0("0");}
+        if(i==4){LOG_0(" ");}
     }
-    printf("\n");
+    LOG_0("\n");
 }
 void GetAllPin(void)
 {
     //unsigned char buf[2];
     int ret;
     ret = read(G_I2cFd, &gcWord_R, 1);
-    if(ret != 1){printf("read fail %d\n", ret);}
+    if(ret != 1){LOG_1("read fail %d\n", ret);}
     //printf("\nread\n");
     //ShowPin(buf[0]);
     //gcWord_R = buf[0];
@@ -401,7 +405,7 @@ void SetAllPin(void)
     unsigned char buf[2];
     //buf[0] = gcWord_W;
     int ret = write(G_I2cFd, &gcWord_W, 1);
-    if(ret != 1){printf("write fail %d\n", ret);}
+    if(ret != 1){LOG_1("write fail %d\n", ret);}
     //printf("\nset\n");
     //ShowPin(gcWord_W);
 
@@ -411,7 +415,7 @@ void LcdSetPos(int line, int offset)
 {
     if(offset >LCD_1602_TOTAL_COLUMN)
     {
-        printf("warning:offset [%d] out of maximum [%d]", offset, LCD_1602_TOTAL_COLUMN);
+        LOG_2("warning:offset [%d] out of maximum [%d]", offset, LCD_1602_TOTAL_COLUMN);
         return;
     }
     switch(line)
@@ -478,13 +482,13 @@ int DisplayListInit(void)
     ret = pthread_mutex_init(&gstLcdDisplayMng.mutex,NULL);
     if(ret)
     {
-        printf("ERROR:mutex init fail %d\n", ret);
+        LOG_1("ERROR:mutex init fail %d\n", ret);
         return ret;
     }
     ret = pthread_mutex_init(&G_stDisplayBufMng.mutex,NULL);
     if(ret)
     {
-        printf("ERROR:mutex init fail %d\n", ret);
+        LOG_1("ERROR:mutex init fail %d\n", ret);
         return ret;
     }
     memset((void*)&gstLcdDisplayMng, 0, sizeof(StuLcdDisplayList));
@@ -495,7 +499,7 @@ int DisplayListInit(void)
         G_stDisplayBufMng.pszLcdDisplayBuf[i] = (char*)malloc(LCD_LINE_DISPLAY_BUF_LEN);
         if(NULL == G_stDisplayBufMng.pszLcdDisplayBuf[i])
         {
-            printf("malloc fail\n");
+            LOG_0("malloc fail\n");
             _exit(1);
         }
         memset(G_stDisplayBufMng.pszLcdDisplayBuf[i],0,LCD_LINE_DISPLAY_BUF_LEN);
@@ -510,13 +514,13 @@ int DisplayAddList(INOUT StuLcdDisplayInfo* pstNewDisplayInfo)
     StuLcdDisplayInfo* pstTmpDisplayInfo = (StuLcdDisplayInfo*)malloc(sizeof(StuLcdDisplayInfo));
     if(NULL == pstTmpDisplayInfo)
     {
-        printf("ERROR: malloc fail\n");
+        LOG_0("ERROR: malloc fail\n");
         pthread_mutex_unlock(&gstLcdDisplayMng.mutex);
         return -1;
     }
     if(gstLcdDisplayMng.ulListCount >= gstLcdDisplayMng.ulListNumMax)
     {
-        printf("ERROR: display list full [%d]\n", gstLcdDisplayMng.ulListCount);
+        LOG_1("ERROR: display list full [%d]\n", gstLcdDisplayMng.ulListCount);
         pthread_mutex_unlock(&gstLcdDisplayMng.mutex);
         free(pstTmpDisplayInfo);
         return -1;
@@ -557,7 +561,7 @@ int DisplayDellListById(ULONG_32 id)
     pthread_mutex_unlock(&gstLcdDisplayMng.mutex);
     if(1 != FindFlag)
     {
-        printf("ERROR: display info id [%d] not found in list, delete fail\n", id);
+        LOG_1("ERROR: display info id [%d] not found in list, delete fail\n", id);
         return -1;
     }
     return 0;
@@ -575,14 +579,14 @@ StuLcdDisplayInfo* getNextDisplay(int line)
     pstTmpLcdDisplayInfo = (StuLcdDisplayInfo* )malloc(sizeof(StuLcdDisplayInfo));
     if(NULL == pstTmpLcdDisplayInfo)
     {
-        printf("malloc fail");
+        LOG_0("malloc fail");
         return NULL;
     }
     switch(line)
     {
         case LCD_LINE_1:pline_rec_tmp = &line_rec_1;break;
         case LCD_LINE_2:pline_rec_tmp = &line_rec_2;break;
-        default:printf("ERROR:wrong line specific!");return NULL;
+        default:LOG_0("ERROR:wrong line specific!");return NULL;
     }
 
     
@@ -741,7 +745,7 @@ void* thread_DisplayHandle(void* arg)
             ShowStringAtPos(stTmpLcdDisplayInfo.ulLine, 0, stTmpLcdDisplayInfo.szBuf);
         }else
         {
-            printf("no display info in list\n");
+            LOG_0("no display info in list\n");
         }
         sleep(2);
     }
@@ -761,7 +765,7 @@ void* thread_DisplayBufFresh(void* arg)
         G_stDisplayBufMng.pszLcdDisplayBuf[i] = (char*)malloc(LCD_LINE_DISPLAY_BUF_LEN);
         if(NULL == G_stDisplayBufMng.pszLcdDisplayBuf[i])
         {
-            printf("malloc fail\n");
+            LOG_0("malloc fail\n");
             _exit(1);
         }
         memset(G_stDisplayBufMng.pszLcdDisplayBuf[i],0,LCD_LINE_DISPLAY_BUF_LEN);
@@ -821,18 +825,18 @@ void DisplayVirBufWrite(int line, signed int offset, char* buf)
     int actualoffset=LCD_1602_TOTAL_COLUMN + offset;
     if(NULL == buf)
     {
-        printf("ERROR:NULL ptr in DisplayStrVirtual\n");
+        LOG_0("ERROR:NULL ptr in DisplayStrVirtual\n");
         return;
     }
     if(line>=LCD_LINE_BUTT || line<0)
     {
-       printf("ERROR:Wrong line %d\n", line);
+       LOG_1("ERROR:Wrong line %d\n", line);
        return; 
     }
     absOffset = offset>0?offset:-offset;
     if(absOffset>LCD_1602_TOTAL_COLUMN)
     {
-        printf("ERROR:out of display window\n");
+        LOG_0("ERROR:out of display window\n");
         return;
     }
     pthread_mutex_lock(&G_stDisplayBufMng.mutex);
@@ -860,12 +864,12 @@ void DisplayThreadStart(void)
     err = pthread_create(&tid, NULL, thread_DisplayBufFresh, NULL);
     if(err)
     {
-        printf("ERROR: create thread fail [%d]\n", err);
+        LOG_1("ERROR: create thread fail [%d]\n", err);
     }
     err = pthread_create(&tid, NULL, thread_DisplayHandle, NULL);
     if(err)
     {
-        printf("ERROR: create thread fail [%d]\n", err);
+        LOG_1("ERROR: create thread fail [%d]\n", err);
     }
     return;
 }
@@ -879,12 +883,12 @@ void LedPwr(char cmd)
     {
         buf[0] |= 1<<3;
         ret = write(G_I2cFd, (void*)&buf[0], 1);
-        printf("on\n");
+        LOG_0("on\n");
     }else
     {
         buf[0] &= ~(1<<3);
         ret = write(G_I2cFd, (void*)&buf[0], 1);
-        printf("off\n");
+        LOG_0("off\n");
     }
 }
 
@@ -920,7 +924,7 @@ void* thread_LoadDisplayFile(void* arg)
 
 	if(0>fd_1 || 0>fd_2)
 	{
-		printf("Failed to open\n");
+		LOG_0("Failed to open\n");
 		return NULL;
 	}
 
@@ -996,7 +1000,7 @@ void MainThreadStart(void)
     err = pthread_create(&tid, NULL, thread_LoadDisplayFile, NULL);
     if(err)
     {
-        printf("ERROR: create thread fail [%d]\n", err);
+        LOG_1("ERROR: create thread fail [%d]\n", err);
     }
 
     return;
@@ -1017,21 +1021,29 @@ int do_daemon(void)
 	}
 	else
 	{
-		printf("Failed to fork\n");
+		LOG_0("Failed to fork\n");
 	}
 }
 
-int main(void)
+
+
+int main(int argc, char* argv[])
 {
     int ret;
     int count = 5;
     char buf[2];
     StuLcdDisplayInfo TmpDisplayInfo;
 
+	if(log_init("/var/log/iic_led.log"))
+	{
+		printf("Failed to inti log\n");
+		exit(1);
+	}
+
     G_I2cFd = Oled_I2c_Init();
     if(G_I2cFd <= 0)
     {
-        printf("fail to open i2c device exit");
+        LOG_0("fail to open i2c device exit");
         _exit(-1);
     }
     OLED_Init();
@@ -1059,14 +1071,14 @@ int main(void)
         TmpDisplayInfo.ulLine = LCD_LINE_1;
         sprintf(TmpDisplayInfo.szBuf, "Line info [%d]", count);
         DisplayAddList(&TmpDisplayInfo);
-        printf("line1 add id[%d]\n", TmpDisplayInfo.ulId);
+        LOG_1("line1 add id[%d]\n", TmpDisplayInfo.ulId);
     }
     for(count=0; count<10; count++)
     {
         TmpDisplayInfo.ulLine = LCD_LINE_2;
         sprintf(TmpDisplayInfo.szBuf, "Line 2, info [%d] hello", count);
         DisplayAddList(&TmpDisplayInfo);
-        printf("line2 add id[%d]\n", TmpDisplayInfo.ulId);
+        LOG_1("line2 add id[%d]\n", TmpDisplayInfo.ulId);
     }
     while(1)
     {
