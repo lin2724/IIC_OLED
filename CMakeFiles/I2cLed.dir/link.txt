@@ -1,0 +1,1 @@
+/usr/bin/c++      CMakeFiles/I2cLed.dir/src/led_i2c_command.cpp.o CMakeFiles/I2cLed.dir/src/log.cpp.o  -o I2cLed -rdynamic -lpthread 
