@@ -12,7 +12,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
-
+#include <semaphore.h>
 #include <string>
 
 #include "log.h"
@@ -23,20 +23,20 @@ using namespace std;
 
 
 
-#define         CMD_clear         0x01             // Çå³ıÆÁÄ»
-#define         CMD_back          0x02             // DDRAM»ØÁãÎ»
-#define         CMD_dec1          0x04             // ¶ÁÈëºóAC£¨Ö¸Õë£©¼õ1£¬Ïò×óĞ´
-#define         CMD_add1          0x06             // ¶ÁÈëºóAC£¨Ö¸Õë£©¼Ó1£¬ÏòÓÒĞ´
-#define         CMD_dis_gb1     0x0f             // ¿ªÏÔÊ¾_¿ª¹â±ê_¿ª¹â±êÉÁË¸
-#define         CMD_dis_gb2     0x0e             // ¿ªÏÔÊ¾_¿ª¹â±ê_¹Ø¹â±êÉÁË¸
-#define         CMD_dis_gb3     0x0c             // ¿ªÏÔÊ¾_¹Ø¹â±ê_¹Ø¹â±êÉÁË¸
-#define         CMD_OFF_dis     0x08             // ¹ØÏÔÊ¾_¹Ø¹â±ê_¹Ø¹â±êÉÁË¸
-#define         CMD_set82         0x38             // 8Î»×ÜÏß_2ĞĞÏÔÊ¾
-#define         CMD_set81         0x30             // 8Î»×ÜÏß_1ĞĞÏÔÊ¾£¨ÉÏ±ßĞĞ£©
-#define         CMD_set42         0x28             // 4Î»×ÜÏß_2ĞĞÏÔÊ¾
-#define         CMD_set41         0x20             // 4Î»×ÜÏß_1ĞĞÏÔÊ¾£¨ÉÏ±ßĞĞ£©
-#define         lin_1               0x80             // 4Î»×ÜÏß_1ĞĞÏÔÊ¾£¨ÉÏ±ßĞĞ£©
-#define         lin_2               0xc0             // 4Î»×ÜÏß_1ĞĞÏÔÊ¾£¨ÉÏ±ßĞĞ£©
+#define         CMD_clear         0x01             // æ¸…é™¤å±å¹•
+#define         CMD_back          0x02             // DDRAMå›é›¶ä½
+#define         CMD_dec1          0x04             // è¯»å…¥åACï¼ˆæŒ‡é’ˆï¼‰å‡1ï¼Œå‘å·¦å†™
+#define         CMD_add1          0x06             // è¯»å…¥åACï¼ˆæŒ‡é’ˆï¼‰åŠ 1ï¼Œå‘å³å†™
+#define         CMD_dis_gb1     0x0f             // å¼€æ˜¾ç¤º_å¼€å…‰æ ‡_å¼€å…‰æ ‡é—ªçƒ
+#define         CMD_dis_gb2     0x0e             // å¼€æ˜¾ç¤º_å¼€å…‰æ ‡_å…³å…‰æ ‡é—ªçƒ
+#define         CMD_dis_gb3     0x0c             // å¼€æ˜¾ç¤º_å…³å…‰æ ‡_å…³å…‰æ ‡é—ªçƒ
+#define         CMD_OFF_dis     0x08             // å…³æ˜¾ç¤º_å…³å…‰æ ‡_å…³å…‰æ ‡é—ªçƒ
+#define         CMD_set82         0x38             // 8ä½æ€»çº¿_2è¡Œæ˜¾ç¤º
+#define         CMD_set81         0x30             // 8ä½æ€»çº¿_1è¡Œæ˜¾ç¤ºï¼ˆä¸Šè¾¹è¡Œï¼‰
+#define         CMD_set42         0x28             // 4ä½æ€»çº¿_2è¡Œæ˜¾ç¤º
+#define         CMD_set41         0x20             // 4ä½æ€»çº¿_1è¡Œæ˜¾ç¤ºï¼ˆä¸Šè¾¹è¡Œï¼‰
+#define         lin_1               0x80             // 4ä½æ€»çº¿_1è¡Œæ˜¾ç¤ºï¼ˆä¸Šè¾¹è¡Œï¼‰
+#define         lin_2               0xc0             // 4ä½æ€»çº¿_1è¡Œæ˜¾ç¤ºï¼ˆä¸Šè¾¹è¡Œï¼‰
 
 
 enum{LCD_LINE_1,LCD_LINE_2,LCD_LINE_BUTT};
@@ -59,7 +59,7 @@ typedef struct TagLcdDisplayInfo
     ULONG_32 ulId;
     ULONG_32 ulLine;
     char szBuf[LCD_DISPLAY_STR_MAX];
-}StuLcdDisplayInfo;
+}LCD_DISPLAY_INFO;
 
 typedef struct TagLcdDisplayList
 {
@@ -67,10 +67,10 @@ typedef struct TagLcdDisplayList
     ULONG_32 ulCurDisplay;
     ULONG_32 ulListNumMax;
     pthread_mutex_t mutex;
-    StuLcdDisplayInfo* pstListHead[LCD_DISPLAY_LIST_MAX];
-}StuLcdDisplayList;
+    LCD_DISPLAY_INFO* pstListHead[LCD_DISPLAY_LIST_MAX];
+}LCD_DISPLAY_LIST;
 
-StuLcdDisplayList gstLcdDisplayMng;
+LCD_DISPLAY_LIST gstLcdDisplayMng;
 int G_I2cFd;
 
 
@@ -79,19 +79,67 @@ typedef struct TagLcdDisplayBufMng
     pthread_mutex_t mutex;
     char pcNeedReFlag[LCD_LINE_BUTT];
     char* pszLcdDisplayBuf[LCD_LINE_BUTT];
-}StuLcdDisplayBufMng;
+    sem_t stSem;
+}LCD_DISPLAY_BUF_MNG;
 
-StuLcdDisplayBufMng G_stDisplayBufMng;
+class cDisplayBufMgr
+{
+    cDisplayBufMgr();
 
-void GetAllPin(void);
-void SetAllPin(void);
+private:
+    TagLcdDisplayBufMng stLcdDisplayBufMng;
+    LCD_DISPLAY_LIST stLcdDisplayMng;
+    int InitMngStruct();
+};
+
+cDisplayBufMgr::cDisplayBufMgr()
+{
+    
+}
+
+int cDisplayBufMgr::InitMngStruct() 
+{
+    int ret = 0, i=0;
+    sem_init(&stLcdDisplayBufMng.stSem, 0, 0);
+    ret = pthread_mutex_init(&stLcdDisplayBufMng.mutex,nullptr);
+    if(ret)
+    {
+    LOG_1("ERROR:mutex init fail %d\n", ret);
+    return ret;
+    }
+    ret = pthread_mutex_init(&stLcdDisplayBufMng.mutex,nullptr);
+    if(ret)
+    {
+    LOG_1("ERROR:mutex init fail %d\n", ret);
+    return ret;
+    }
+    memset((void*)&gstLcdDisplayMng, 0, sizeof(LCD_DISPLAY_LIST));
+    stLcdDisplayMng.ulListNumMax = LCD_DISPLAY_LIST_MAX;
+    memset(&stLcdDisplayBufMng,0,sizeof(LCD_DISPLAY_BUF_MNG));
+    for(i=0; i< LCD_LINE_BUTT; i++)
+    {
+        stLcdDisplayBufMng.pszLcdDisplayBuf[i] = (char*)malloc(LCD_LINE_DISPLAY_BUF_LEN);
+        if(nullptr == stLcdDisplayBufMng.pszLcdDisplayBuf[i])
+        {
+            LOG_0("malloc fail\n");
+            _exit(1);
+        }
+        memset(stLcdDisplayBufMng.pszLcdDisplayBuf[i],0,LCD_LINE_DISPLAY_BUF_LEN);
+    }
+    return 0;
+}
+
+LCD_DISPLAY_BUF_MNG G_stDisplayBufMng;
+
+void GetAllPin();
+void SetAllPin();
 int i2c_init(char* dev_file)
 {
-
+    return 0;
 }
 
 
-void JustTest(void)
+void JustTest()
 {
     int i2c_fd;
     int slave_addr = SLAVE_ADDR;
@@ -136,8 +184,6 @@ void JustTest(void)
         close(i2c_fd);
     }
 
-
-    return;
 #if 0
     res = i2c_smbus_read_word_data(i2c_fd, reg);
     if (res < 0) {
@@ -180,7 +226,7 @@ void setHalfWordLow(unsigned char dat)
     gcWord_W |= (dat%16)<<4;
     //printf("set data 0x%x\n", gcWord_W>>4);
 }
-void wait_1602_busy(void)
+void wait_1602_busy()
 {
     //printf("wait busy\n");
     usleep(500);
@@ -252,7 +298,7 @@ void LCD1602_WriteCMD(unsigned char cmd)
     usleep(10*1000);
 }
 
-int Oled_I2c_Init(void)
+int Oled_I2c_Init()
 {
     char buf[2];
     const char* device_name[2] = {"/dev/i2c-0", "/dev/i2c-1"};
@@ -299,21 +345,21 @@ void I2C_WriteByte(unsigned char addr,unsigned char data)
 
 
 unsigned char Xword[]={
-        0x18,0x18,0x07,0x08,0x08,0x08,0x07,0x00,  //¡æ£¬´úÂë 0x00
-        0x00,0x00,0x00,0x00,0xff,0x00,0x00,0x00,  //Ò»£¬´úÂë 0x01
-        0x00,0x00,0x00,0x0e,0x00,0xff,0x00,0x00,  //¶ş£¬´úÂë 0x02
-        0x00,0x00,0xff,0x00,0x0e,0x00,0xff,0x00,  //Èı£¬´úÂë 0x03
-        0x00,0x00,0xff,0xf5,0xfb,0xf1,0xff,0x00,  //ËÄ£¬´úÂë 0x04
-        0x00,0xfe,0x08,0xfe,0x0a,0x0a,0xff,0x00,  //Îå£¬´úÂë 0x05
-        0x00,0x04,0x00,0xff,0x00,0x0a,0x11,0x00,  //Áù£¬´úÂë 0x06
-        0x00,0x1f,0x11,0x1f,0x11,0x11,0x1f,0x00,  //ÈÕ£¬´úÂë 0x07
+        0x18,0x18,0x07,0x08,0x08,0x08,0x07,0x00,  //â„ƒï¼Œä»£ç  0x00
+        0x00,0x00,0x00,0x00,0xff,0x00,0x00,0x00,  //ä¸€ï¼Œä»£ç  0x01
+        0x00,0x00,0x00,0x0e,0x00,0xff,0x00,0x00,  //äºŒï¼Œä»£ç  0x02
+        0x00,0x00,0xff,0x00,0x0e,0x00,0xff,0x00,  //ä¸‰ï¼Œä»£ç  0x03
+        0x00,0x00,0xff,0xf5,0xfb,0xf1,0xff,0x00,  //å››ï¼Œä»£ç  0x04
+        0x00,0xfe,0x08,0xfe,0x0a,0x0a,0xff,0x00,  //äº”ï¼Œä»£ç  0x05
+        0x00,0x04,0x00,0xff,0x00,0x0a,0x11,0x00,  //å…­ï¼Œä»£ç  0x06
+        0x00,0x1f,0x11,0x1f,0x11,0x11,0x1f,0x00,  //æ—¥ï¼Œä»£ç  0x07
 };
-void CgramWrite(void) { // ×°ÈëCGRAM //
+void CgramWrite() { // è£…å…¥CGRAM //
     unsigned char i;
-    LCD1602_WriteCMD(0x06);   // CGRAMµØÖ·×Ô¶¯¼Ó1
-    LCD1602_WriteCMD(0x40);   // CGRAMµØÖ·ÉèÎª00´¦
+    LCD1602_WriteCMD(0x06);   // CGRAMåœ°å€è‡ªåŠ¨åŠ 1
+    LCD1602_WriteCMD(0x40);   // CGRAMåœ°å€è®¾ä¸º00å¤„
     for(i=0;i<64;i++) {
-        LCD1602_WriteData(Xword[i]);// °´Êı×éĞ´ÈëÊı¾İ
+        LCD1602_WriteData(Xword[i]);// æŒ‰æ•°ç»„å†™å…¥æ•°æ®
     }
 }
 
@@ -335,10 +381,10 @@ void LCD1602_LightCmd(int cmd)
     set_1602_Light(cmd);
     SetAllPin();
 }
-void OLED_Init(void)
+void OLED_Init()
 {
     LCD1602_LightCmd(1);
-    usleep(100*1000); //ÕâÀïµÄÑÓÊ±ºÜÖØÒª
+    usleep(100*1000); //è¿™é‡Œçš„å»¶æ—¶å¾ˆé‡è¦
 
 
     LCD_write_L4bit_command(0x03);
@@ -360,21 +406,21 @@ void OLED_Init(void)
 
 
 
-    LCD1602_WriteCMD(CMD_set42); //* ÏÔÊ¾Ä£Ê½ÉèÖÃ£º4Î»Êı¾İÏÔÊ¾2ĞĞ£¬
-    LCD1602_WriteCMD(CMD_set42); //* ±ØĞëÔÙÔËĞĞÒ»´Î£¡²»È»¾Í³ö´í
-    LCD1602_WriteCMD(CMD_set42); //* ±ØĞëÔÙÔËĞĞÒ»´Î£¡²»È»¾Í³ö´í
-    LCD1602_WriteCMD(CMD_set42); //* ±ØĞëÔÙÔËĞĞÒ»´Î£¡²»È»¾Í³ö´í
-    LCD1602_WriteCMD(CMD_clear); //  ÏÔÊ¾ÇåÆÁ
-    LCD1602_WriteCMD(CMD_back);  //* Êı¾İÖ¸ÕëÖ¸ÏòµÚ1ĞĞµÚ1¸ö×Ö·ûÎ»ÖÃ
-    LCD1602_WriteCMD(CMD_add1);  //  ÏÔÊ¾¹â±êÒÆ¶¯ÉèÖÃ£ºÎÄ×Ö²»¶¯£¬¹â±êÓÒÒÆ
-    LCD1602_WriteCMD(CMD_dis_gb1);  //  ÏÔÊ¾¿ª¼°¹â±êÉèÖÃ£ºÏÔÊ¾¿ª£¬¹â±ê¿ª£¬ÉÁË¸¿ª
+    LCD1602_WriteCMD(CMD_set42); //* æ˜¾ç¤ºæ¨¡å¼è®¾ç½®ï¼š4ä½æ•°æ®æ˜¾ç¤º2è¡Œï¼Œ
+    LCD1602_WriteCMD(CMD_set42); //* å¿…é¡»å†è¿è¡Œä¸€æ¬¡ï¼ä¸ç„¶å°±å‡ºé”™
+    LCD1602_WriteCMD(CMD_set42); //* å¿…é¡»å†è¿è¡Œä¸€æ¬¡ï¼ä¸ç„¶å°±å‡ºé”™
+    LCD1602_WriteCMD(CMD_set42); //* å¿…é¡»å†è¿è¡Œä¸€æ¬¡ï¼ä¸ç„¶å°±å‡ºé”™
+    LCD1602_WriteCMD(CMD_clear); //  æ˜¾ç¤ºæ¸…å±
+    LCD1602_WriteCMD(CMD_back);  //* æ•°æ®æŒ‡é’ˆæŒ‡å‘ç¬¬1è¡Œç¬¬1ä¸ªå­—ç¬¦ä½ç½®
+    LCD1602_WriteCMD(CMD_add1);  //  æ˜¾ç¤ºå…‰æ ‡ç§»åŠ¨è®¾ç½®ï¼šæ–‡å­—ä¸åŠ¨ï¼Œå…‰æ ‡å³ç§»
+    LCD1602_WriteCMD(CMD_dis_gb1);  //  æ˜¾ç¤ºå¼€åŠå…‰æ ‡è®¾ç½®ï¼šæ˜¾ç¤ºå¼€ï¼Œå…‰æ ‡å¼€ï¼Œé—ªçƒå¼€
     CgramWrite();
     LOG_0("led init done\n");
 }
 
 
 
-void OLED_DrawBMP(void)
+void OLED_DrawBMP()
 {
 
 }
@@ -390,7 +436,7 @@ void ShowPin(char data)
     }
     LOG_0("\n");
 }
-void GetAllPin(void)
+void GetAllPin()
 {
     //unsigned char buf[2];
     int ret;
@@ -400,7 +446,7 @@ void GetAllPin(void)
     //ShowPin(buf[0]);
     //gcWord_R = buf[0];
 }
-void SetAllPin(void)
+void SetAllPin()
 {
     unsigned char buf[2];
     //buf[0] = gcWord_W;
@@ -476,43 +522,44 @@ void ClearLine(int line)
 
 
 
-int DisplayListInit(void)
+int DisplayListInit()
 {
     int ret = 0, i=0;
-    ret = pthread_mutex_init(&gstLcdDisplayMng.mutex,NULL);
+    ret = pthread_mutex_init(&gstLcdDisplayMng.mutex,nullptr);
     if(ret)
     {
         LOG_1("ERROR:mutex init fail %d\n", ret);
         return ret;
     }
-    ret = pthread_mutex_init(&G_stDisplayBufMng.mutex,NULL);
+    ret = pthread_mutex_init(&G_stDisplayBufMng.mutex,nullptr);
     if(ret)
     {
         LOG_1("ERROR:mutex init fail %d\n", ret);
         return ret;
     }
-    memset((void*)&gstLcdDisplayMng, 0, sizeof(StuLcdDisplayList));
+    memset((void*)&gstLcdDisplayMng, 0, sizeof(LCD_DISPLAY_LIST));
     gstLcdDisplayMng.ulListNumMax = LCD_DISPLAY_LIST_MAX;
-    memset(&G_stDisplayBufMng,0,sizeof(StuLcdDisplayBufMng));
+    memset(&G_stDisplayBufMng,0,sizeof(LCD_DISPLAY_BUF_MNG));
     for(i=0; i< LCD_LINE_BUTT; i++)
     {
         G_stDisplayBufMng.pszLcdDisplayBuf[i] = (char*)malloc(LCD_LINE_DISPLAY_BUF_LEN);
-        if(NULL == G_stDisplayBufMng.pszLcdDisplayBuf[i])
+        if(nullptr == G_stDisplayBufMng.pszLcdDisplayBuf[i])
         {
             LOG_0("malloc fail\n");
             _exit(1);
         }
         memset(G_stDisplayBufMng.pszLcdDisplayBuf[i],0,LCD_LINE_DISPLAY_BUF_LEN);
     }
+    return 0;
 }
 
-int DisplayAddList(INOUT StuLcdDisplayInfo* pstNewDisplayInfo)
+int DisplayAddList(INOUT LCD_DISPLAY_INFO* pstNewDisplayInfo)
 {
     int i = 0;
     ULONG_32 id = 0;
     pthread_mutex_lock(&gstLcdDisplayMng.mutex);
-    StuLcdDisplayInfo* pstTmpDisplayInfo = (StuLcdDisplayInfo*)malloc(sizeof(StuLcdDisplayInfo));
-    if(NULL == pstTmpDisplayInfo)
+    LCD_DISPLAY_INFO* pstTmpDisplayInfo = (LCD_DISPLAY_INFO*)malloc(sizeof(LCD_DISPLAY_INFO));
+    if(nullptr == pstTmpDisplayInfo)
     {
         LOG_0("ERROR: malloc fail\n");
         pthread_mutex_unlock(&gstLcdDisplayMng.mutex);
@@ -533,7 +580,7 @@ int DisplayAddList(INOUT StuLcdDisplayInfo* pstNewDisplayInfo)
         }
     }
     pstNewDisplayInfo->ulId = id;
-    memcpy((void*)pstTmpDisplayInfo, (void*)pstNewDisplayInfo, sizeof(StuLcdDisplayInfo));
+    memcpy((void*)pstTmpDisplayInfo, (void*)pstNewDisplayInfo, sizeof(LCD_DISPLAY_INFO));
     gstLcdDisplayMng.pstListHead[gstLcdDisplayMng.ulListCount] = pstTmpDisplayInfo;
     gstLcdDisplayMng.ulListCount ++;
     pthread_mutex_unlock(&gstLcdDisplayMng.mutex);
@@ -568,25 +615,25 @@ int DisplayDellListById(ULONG_32 id)
 }
 
 
-StuLcdDisplayInfo* getNextDisplay(int line)
+LCD_DISPLAY_INFO* getNextDisplay(int line)
 {
     static int line_rec_1 = -1;
     static int line_rec_2 = -1;
     int i = 0;
-    int* pline_rec_tmp = NULL;
+    int* pline_rec_tmp = nullptr;
     int succeed_flag = 0;
-    StuLcdDisplayInfo* pstTmpLcdDisplayInfo = NULL;
-    pstTmpLcdDisplayInfo = (StuLcdDisplayInfo* )malloc(sizeof(StuLcdDisplayInfo));
-    if(NULL == pstTmpLcdDisplayInfo)
+    LCD_DISPLAY_INFO* pstTmpLcdDisplayInfo = nullptr;
+    pstTmpLcdDisplayInfo = (LCD_DISPLAY_INFO* )malloc(sizeof(LCD_DISPLAY_INFO));
+    if(nullptr == pstTmpLcdDisplayInfo)
     {
         LOG_0("malloc fail");
-        return NULL;
+        return nullptr;
     }
     switch(line)
     {
         case LCD_LINE_1:pline_rec_tmp = &line_rec_1;break;
         case LCD_LINE_2:pline_rec_tmp = &line_rec_2;break;
-        default:LOG_0("ERROR:wrong line specific!");return NULL;
+        default:LOG_0("ERROR:wrong line specific!");return nullptr;
     }
 
     
@@ -597,7 +644,7 @@ StuLcdDisplayInfo* getNextDisplay(int line)
             if(i>*pline_rec_tmp && gstLcdDisplayMng.pstListHead[i]->ulLine == line)
             {
                 memcpy(pstTmpLcdDisplayInfo, gstLcdDisplayMng.pstListHead[i],
-                       sizeof(StuLcdDisplayInfo));
+                       sizeof(LCD_DISPLAY_INFO));
                 *pline_rec_tmp = i;
                 succeed_flag = 1;
                 break;
@@ -609,7 +656,7 @@ StuLcdDisplayInfo* getNextDisplay(int line)
             {
                 pthread_mutex_unlock(&gstLcdDisplayMng.mutex);
                 free(pstTmpLcdDisplayInfo);
-                return NULL;
+                return nullptr;
             }else
             {
                 *pline_rec_tmp = -1;
@@ -625,7 +672,7 @@ StuLcdDisplayInfo* getNextDisplay(int line)
 
 typedef struct DisplayMngRec
 {
-    StuLcdDisplayInfo* pstLcdDisplayInfo;
+    LCD_DISPLAY_INFO* pstLcdDisplayInfo;
     int offset;
     int timeUse;
     int roundUse;
@@ -643,13 +690,13 @@ void* thread_DisplayHandle(void* arg)
     int MissionFlag = 0;
     char szBuf[LCD_DISPLAY_STR_MAX];
     int display_len = 0;
-    StuLcdDisplayInfo stTmpLcdDisplayInfo;
+    LCD_DISPLAY_INFO stTmpLcdDisplayInfo;
     stDisplayMngRec pDisplayMngRec[LCD_LINE_BUTT] = {0};
     while(1)
     {
         for(i=0; i<LCD_LINE_BUTT; i++)
         {
-            if(NULL == pDisplayMngRec[i].pstLcdDisplayInfo || pDisplayMngRec[i].done)
+            if(nullptr == pDisplayMngRec[i].pstLcdDisplayInfo || pDisplayMngRec[i].done)
             {
                 free(pDisplayMngRec[i].pstLcdDisplayInfo);
                 pDisplayMngRec[i].pstLcdDisplayInfo = getNextDisplay(i);
@@ -714,7 +761,7 @@ void* thread_DisplayHandle(void* arg)
 
         for(i=0; i<LCD_LINE_BUTT; i++)
         {
-            if(NULL == pDisplayMngRec[i].pstLcdDisplayInfo){continue;}
+            if(nullptr == pDisplayMngRec[i].pstLcdDisplayInfo){continue;}
             DisplayVirBufWrite(i, pDisplayMngRec[i].offset, pDisplayMngRec[i].pstLcdDisplayInfo->szBuf);
         }
        usleep(500*1000);
@@ -726,7 +773,7 @@ void* thread_DisplayHandle(void* arg)
         if(gstLcdDisplayMng.ulCurDisplay < gstLcdDisplayMng.ulListCount)
         {
             memcpy(&stTmpLcdDisplayInfo, gstLcdDisplayMng.pstListHead[gstLcdDisplayMng.ulCurDisplay],
-                   sizeof(StuLcdDisplayInfo));
+                   sizeof(LCD_DISPLAY_INFO));
             MissionFlag = 1;
             gstLcdDisplayMng.ulCurDisplay++;
             if(gstLcdDisplayMng.ulCurDisplay >= gstLcdDisplayMng.ulListCount)
@@ -757,21 +804,21 @@ void* thread_DisplayHandle(void* arg)
 void* thread_DisplayBufFresh(void* arg)
 {
     int i = 0;
-    StuLcdDisplayInfo stTmpLcdDisplayInfo;
-    char* TmpStr = NULL;
+    LCD_DISPLAY_INFO stTmpLcdDisplayInfo;
+    char* TmpStr = nullptr;
     char szBufZero[1] = {0};
     for(i=30; i< LCD_LINE_BUTT; i++)
     {
         G_stDisplayBufMng.pszLcdDisplayBuf[i] = (char*)malloc(LCD_LINE_DISPLAY_BUF_LEN);
-        if(NULL == G_stDisplayBufMng.pszLcdDisplayBuf[i])
+        if(nullptr == G_stDisplayBufMng.pszLcdDisplayBuf[i])
         {
             LOG_0("malloc fail\n");
             _exit(1);
         }
         memset(G_stDisplayBufMng.pszLcdDisplayBuf[i],0,LCD_LINE_DISPLAY_BUF_LEN);
     }
-    //memset(&G_stDisplayBufMng,0,sizeof(StuLcdDisplayBufMng));
-    while(1)
+    //memset(&G_stDisplayBufMng,0,sizeof(LCD_DISPLAY_BUF_MNG));
+    for(;;)
     {
         pthread_mutex_lock(&G_stDisplayBufMng.mutex);
         if(G_stDisplayBufMng.pcNeedReFlag[LCD_LINE_1])
@@ -823,9 +870,9 @@ void DisplayVirBufWrite(int line, signed int offset, char* buf)
 {
     int absOffset = 0;
     int actualoffset=LCD_1602_TOTAL_COLUMN + offset;
-    if(NULL == buf)
+    if(nullptr == buf)
     {
-        LOG_0("ERROR:NULL ptr in DisplayStrVirtual\n");
+        LOG_0("ERROR:nullptr ptr in DisplayStrVirtual\n");
         return;
     }
     if(line>=LCD_LINE_BUTT || line<0)
@@ -856,22 +903,21 @@ void DisplayVirBufWrite(int line, signed int offset, char* buf)
     pthread_mutex_unlock(&G_stDisplayBufMng.mutex);
 }
 
-void DisplayThreadStart(void)
+void DisplayThreadStart()
 {
     pthread_t tid;
     int err = 0;
     DisplayListInit();
-    err = pthread_create(&tid, NULL, thread_DisplayBufFresh, NULL);
+    err = pthread_create(&tid, nullptr, thread_DisplayBufFresh, nullptr);
     if(err)
     {
         LOG_1("ERROR: create thread fail [%d]\n", err);
     }
-    err = pthread_create(&tid, NULL, thread_DisplayHandle, NULL);
+    err = pthread_create(&tid, nullptr, thread_DisplayHandle, nullptr);
     if(err)
     {
         LOG_1("ERROR: create thread fail [%d]\n", err);
     }
-    return;
 }
 
 void LedPwr(char cmd)
@@ -908,7 +954,7 @@ void* thread_LoadDisplayFile(void* arg)
 	char line_2_file_name[] = "/dev/lcd_line_2";
 	char line_1_buf[LCD_DISPLAY_STR_MAX] = {0};
 	char line_2_buf[LCD_DISPLAY_STR_MAX] = {0};
-	StuLcdDisplayInfo TmpDisplayInfo;
+	LCD_DISPLAY_INFO TmpDisplayInfo;
 	int buf_pos = 0;
 	int fd_list[512] = {0};
 	int fd_list_pos = 0;
@@ -925,7 +971,7 @@ void* thread_LoadDisplayFile(void* arg)
 	if(0>fd_1 || 0>fd_2)
 	{
 		LOG_0("Failed to open\n");
-		return NULL;
+		return nullptr;
 	}
 
 	for(;;)
@@ -992,21 +1038,20 @@ void* thread_LoadDisplayFile(void* arg)
 }
 
 
-void MainThreadStart(void)
+void MainThreadStart()
 {
     pthread_t tid;
     int err = 0;
     DisplayListInit();
-    err = pthread_create(&tid, NULL, thread_LoadDisplayFile, NULL);
+    err = pthread_create(&tid, nullptr, thread_LoadDisplayFile, nullptr);
     if(err)
     {
         LOG_1("ERROR: create thread fail [%d]\n", err);
     }
 
-    return;
 }
 
-int do_daemon(void)
+int do_daemon()
 {
 	int fd = 0;
 	fd = fork();
@@ -1022,6 +1067,7 @@ int do_daemon(void)
 	else
 	{
 		LOG_0("Failed to fork\n");
+		return -1;
 	}
 }
 
@@ -1032,7 +1078,7 @@ int main(int argc, char* argv[])
     int ret;
     int count = 5;
     char buf[2];
-    StuLcdDisplayInfo TmpDisplayInfo;
+    LCD_DISPLAY_INFO TmpDisplayInfo;
 
 	if(log_init("/var/log/iic_led.log"))
 	{
@@ -1048,10 +1094,10 @@ int main(int argc, char* argv[])
     }
     OLED_Init();
     /*
-    print2(0x80,'z');   // ÔÚµÚ1ĞĞµÚ1Î»ÏÔÊ¾Êı×Ö1 
-    print2(0x40,'5');   // ÔÚµÚ1ĞĞµÚ1Î»ÏÔÊ¾Êı×Ö5
-    print2(0x85,0x05);     // ÔÚµÚ1ĞĞµÚ5Î»ÏÔÊ¾×Ô¶¨Òå×Ö·û
-    print2(0x88,0xE4);     // ÔÚµÚ1ĞĞµÚ9Î» ASCII ÖĞµÄupeer 4bit 1110  lower 4bit 0100¶ÔÓ¦µÄ ¦Ì
+    print2(0x80,'z');   // åœ¨ç¬¬1è¡Œç¬¬1ä½æ˜¾ç¤ºæ•°å­—1 
+    print2(0x40,'5');   // åœ¨ç¬¬1è¡Œç¬¬1ä½æ˜¾ç¤ºæ•°å­—5
+    print2(0x85,0x05);     // åœ¨ç¬¬1è¡Œç¬¬5ä½æ˜¾ç¤ºè‡ªå®šä¹‰å­—ç¬¦
+    print2(0x88,0xE4);     // åœ¨ç¬¬1è¡Œç¬¬9ä½ ASCII ä¸­çš„upeer 4bit 1110  lower 4bit 0100å¯¹åº”çš„ Î¼
     print(0x42,"www.51cto.com");
     */
 
